@@ -119,7 +119,7 @@ vector<string> splitString(string s){
 
 void removeOrder(StockOrder* curOrder) {
     int orderId = curOrder->orderId;
-    orderLookUp.erase(orderId); 
+    orderLookUp.erase(orderId);
     string keyLimitLookUp = curOrder->symbol + curOrder->side + convertFloatToString(curOrder->price);
     Limit *curLimit = &limitLookUp[keyLimitLookUp];
 
@@ -127,11 +127,18 @@ void removeOrder(StockOrder* curOrder) {
     curLimit->totalVolume -= curOrder->volume;
     curLimit->size -= 1; 
     if (curOrder->prevOrder == NULL) {
-        curLimit->headOrder = curOrder->nextOrder; 
+        curLimit->headOrder = curOrder->nextOrder;
+        if (curOrder->nextOrder != NULL) {
+            curOrder->nextOrder->prevOrder = NULL;
+        } else {
+            curLimit->tailOrder = NULL;
+        }
     } else {
         curOrder->prevOrder->nextOrder = curOrder->nextOrder;
         if (curOrder->nextOrder != NULL) {
-            curOrder->nextOrder->prevOrder = curOrder->prevOrder; 
+            curOrder->nextOrder->prevOrder = curOrder->prevOrder;
+        } else {
+            curLimit->tailOrder = curOrder->prevOrder;
         }
     }
     if (curLimit->size == 0) {
