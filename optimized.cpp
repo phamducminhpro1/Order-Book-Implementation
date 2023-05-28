@@ -157,21 +157,25 @@ void addOrder(StockOrder* curOrder) {
     int orderId = curOrder->orderId; 
     int volume = curOrder->volume; 
     float price = curOrder->price;
+
+    orderLookUp[orderId] = *curOrder; 
     allSymbols.insert(symbol);
-    orderLookUp[orderId] = *curOrder;
     string keyLimitLookUp = symbol + side + convertFloatToString(price); 
+
     if (limitLookUp.find(keyLimitLookUp) == limitLookUp.end()) {
         Limit curLimit(price, side, volume, &orderLookUp[orderId], &orderLookUp[orderId]); 
         limitLookUp[keyLimitLookUp] = curLimit; 
     } else {
         //Add the order to the beginning of the linked list 
         limitLookUp[keyLimitLookUp].headOrder->prevOrder = &orderLookUp[orderId];
-        curOrder->nextOrder = limitLookUp[keyLimitLookUp].headOrder;
-        limitLookUp[keyLimitLookUp].headOrder = curOrder;
+        orderLookUp[orderId].nextOrder = limitLookUp[keyLimitLookUp].headOrder;
+        orderLookUp[orderId] = orderLookUp[orderId];
+        limitLookUp[keyLimitLookUp].headOrder = &orderLookUp[orderId];
     }
     limitLookUp[keyLimitLookUp].size += 1; 
     limitLookUp[keyLimitLookUp].totalVolume += volume;
     //Update the map 
+
     if (side == "BUY") {
         limitSetBuyLookUp[symbol].insert(price);
     } else {
@@ -252,10 +256,11 @@ void processInsertQuery(vector<string> command) {
     int timestamp = stoi(command[6]); 
     //Current order
     StockOrder curOrder(orderId, symbol, side, price, volume, timestamp);
-
+    
     //I have not added the order yet. 
     //It will added in the matchOrder
-    matchOrder(&curOrder); 
+    //Add order
+    matchOrder(&curOrder);
     return;    
 }
   
@@ -328,6 +333,8 @@ int main() {
     vector<string> tmp1 = run(command);
     for (string line : tmp1) {
         cout << line << endl;
-    }  
+    } 
+    // cout << limitLookUp["AAPLBUY14.235"].headOrder->nextOrder->orderId; 
+    // cout << "Fuck " << endl;
     return 0; 
 }
