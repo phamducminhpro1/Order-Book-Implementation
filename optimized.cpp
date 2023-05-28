@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 using namespace std; 
 
-vector<string> res; 
+vector<string> finalResult; 
 class StockOrder {
     public:
         int orderId = -1;
@@ -32,14 +32,14 @@ class MatchedOrders {
         string symbol; 
         float price; 
         int volume; 
-        int aggressive_order_id; 
+        int aggfinalResultsive_order_id; 
         int passive_order_id;
       
-    MatchedOrders(string symbol, float price, int volume, int aggressive_order_id, int passive_order_id) {
+    MatchedOrders(string symbol, float price, int volume, int aggfinalResultsive_order_id, int passive_order_id) {
         this->symbol = symbol;
         this->price = price; 
         this->volume = volume; 
-        this->aggressive_order_id = aggressive_order_id; 
+        this->aggfinalResultsive_order_id = aggfinalResultsive_order_id; 
         this->passive_order_id = passive_order_id;
     }
     MatchedOrders() {}
@@ -78,8 +78,8 @@ struct customComparator {
 string convertFloatToString(float x) {
     stringstream s;
     s<<x; 
-    string result=s.str(); 
-    return result; 
+    string finalResultult=s.str(); 
+    return finalResultult; 
 }
 
 unordered_map<int, StockOrder> orderLookUp; 
@@ -111,10 +111,10 @@ vector<string> splitString(string s){
         if(s[i] == ',') s[i] = ' ';
     }
     istringstream is(s);
-    vector<string> result;
+    vector<string> finalResultult;
     string x;
-    while(is >> x) result.push_back(x);
-    return result;   
+    while(is >> x) finalResultult.push_back(x);
+    return finalResultult;   
 }
 
 void removeOrder(StockOrder* curOrder) {
@@ -241,7 +241,7 @@ void matchOrder(StockOrder* curOrder) {
         addOrder(curOrder); 
     }
     for (MatchedOrders& matchedOrders : vecMatchedOrders) {
-        res.push_back(matchedOrders.symbol + "," + convertFloatToString(matchedOrders.price) + "," + to_string(matchedOrders.volume) + "," +  to_string(matchedOrders.aggressive_order_id) + "," + to_string(matchedOrders.passive_order_id));
+        finalResult.push_back(matchedOrders.symbol + "," + convertFloatToString(matchedOrders.price) + "," + to_string(matchedOrders.volume) + "," +  to_string(matchedOrders.aggfinalResultsive_order_id) + "," + to_string(matchedOrders.passive_order_id));
     }
     return; 
 }
@@ -265,7 +265,32 @@ void processInsertQuery(vector<string> command) {
 }
   
 void processAmendQuery(vector<string> command) {
-    
+    int orderId = stoi(command[1]); 
+    float price_change = convertToFloat(command[2]); 
+    int volume_change = stoi(command[3]);
+    int timestamp = stoi(command[4]);
+    StockOrder curOrder; 
+
+    if (orderLookUp.find(orderId) != orderLookUp.end()) {
+        curOrder = orderLookUp[orderId]; 
+    } else {
+        cout << "Invalid amend request";
+    }  
+
+    if (curOrder.volume == volume_change && curOrder.price == price_change) {
+        return; 
+    }
+
+    if (curOrder.volume > volume_change && curOrder.price == price_change) {
+        orderLookUp[orderId].volume = volume_change;
+        limitLookUp[curOrder.symbol + curOrder.side + convertFloatToString(curOrder.price)].totalVolume -= (curOrder.volume - volume_change);
+        return;  
+    }  
+
+    removeOrder(&curOrder); 
+    curOrder.volume = volume_change;
+    curOrder.price = price_change; 
+    matchOrder(&curOrder);
     return; 
 }  
 
@@ -283,20 +308,20 @@ void processPullQuery(vector<string> command) {
 void outPutPerSymbol() {
     for (const string& symbol : allSymbols) {
         if (limitSetBuyLookUp[symbol].size() != 0 || limitSetSellLookUp[symbol].size() != 0) {
-            res.push_back("===" + symbol + "===");
+            finalResult.push_back("===" + symbol + "===");
         } 
         auto it1 = limitSetBuyLookUp[symbol].begin(); 
         auto it2 = limitSetSellLookUp[symbol].begin(); 
         while (it1 != limitSetBuyLookUp[symbol].end() || it2 != limitSetSellLookUp[symbol].end()) {
             if (it1 != limitSetBuyLookUp[symbol].end() && it2 != limitSetSellLookUp[symbol].end()) {
-               res.push_back(convertFloatToString(*it1) + "," + to_string(limitLookUp[symbol + "BUY" + convertFloatToString(*it1)].totalVolume) + "," + convertFloatToString(*it2) + "," + to_string(limitLookUp[symbol + "SELL" + convertFloatToString(*it2)].totalVolume));
+               finalResult.push_back(convertFloatToString(*it1) + "," + to_string(limitLookUp[symbol + "BUY" + convertFloatToString(*it1)].totalVolume) + "," + convertFloatToString(*it2) + "," + to_string(limitLookUp[symbol + "SELL" + convertFloatToString(*it2)].totalVolume));
                it1++; 
                it2++; 
             } else if (it1 != limitSetBuyLookUp[symbol].end()) {
-                res.push_back(convertFloatToString(*it1) + "," + to_string(limitLookUp[symbol + "BUY" + convertFloatToString(*it1)].totalVolume) + ",,");
+                finalResult.push_back(convertFloatToString(*it1) + "," + to_string(limitLookUp[symbol + "BUY" + convertFloatToString(*it1)].totalVolume) + ",,");
                 it1++;
             } else {
-                res.push_back( ",," + convertFloatToString(*it2) + "," + to_string(limitLookUp[symbol + "SELL" + convertFloatToString(*it2)].totalVolume));
+                finalResult.push_back( ",," + convertFloatToString(*it2) + "," + to_string(limitLookUp[symbol + "SELL" + convertFloatToString(*it2)].totalVolume));
                 it2++;  
             }
         }
@@ -317,7 +342,7 @@ vector<string> run(vector<string> const& input) {
         }
     } 
     outPutPerSymbol();
-    return res;
+    return finalResult;
 }
 
 
