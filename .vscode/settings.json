@@ -13,6 +13,7 @@
         "xstddef": "cpp",
         "xlocmon": "cpp",
         "codecvt": "cpp",
-        "xlocale": "cpp"
+        "xlocale": "cpp",
+        "xutility": "cpp"
     }
 }
