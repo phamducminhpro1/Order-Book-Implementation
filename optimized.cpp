@@ -1,10 +1,45 @@
-#include <bits/stdc++.h>
+/*
+Author: Minh - Last modified: 29-5
+This comment describes the implementation of a matching engine using C++.
+
+The matching engine manages orders through a Central Limit Order Book (CLOB) with two sides: buy and sell.
+The supported operations on orders are PULL, AMEND, and INSERT, which can be further explored in the main.hpp file or the problem description.
+Upon execution, the order book generates sorted bid and ask price levels.
+
+The main approach of the implementation is as follows:
+A balanced binary tree is utilized to store price levels instead of individual orders, ensuring the prices are sorted in ascending order.
+Each price level is represented by a linked list of orders.
+
+To elaborate further:
+
+An order ID to order mapping is maintained.
+A map called "limitLookUp" is used to map a combination of symbol, side (BUY/SELL), and price limit to a "Limit" object, which represents a linked list of prices.
+Additional maps are employed to store prices sorted by sell and buy.
+*/
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <set>
+#include <sstream>
+using namespace std;
 using namespace std; 
 
-vector<string> finalResult; 
+
+//Stock order Order.
+// It contains 
+// - orderID,
+// - symbol: Symbol of the stocks
+// - side: string of either buy or sell
+// - price of the stock
+// - volume of the stock
+// - timestamp: the time when the order was created (Note the timestamp variable is the variable I created when I add to the stock) 
+// - nextOrder: pointer to the next order in the linked list
+// - prevOrder: pointer to the previous order in the linked list
 class StockOrder {
     public:
-        int orderId = -1;
+        int orderId; 
         string symbol;
         string side; 
         float price; 
@@ -23,10 +58,19 @@ class StockOrder {
         this->nextOrder = NULL; 
         this->prevOrder = NULL; 
     } 
-    
     StockOrder() {}
 };
 
+// MatchedOrders is a class that represents the result of matching two orders.
+// It contains the following member variables:
+// - symbol: the symbol of the matched stock
+// - price: the price at which the orders were matched
+// - volume: the volume of the matched orders
+// - aggressive_order_id: the identifier of the aggressive order (the order that initiated the match)
+// - passive_order_id: the identifier of the passive order (the order that was matched against)
+// The purpose of this class is to store the matched order details and facilitate printing out the result.
+// It has a constructor that initializes the member variables based on the provided arguments, as well as a default constructor.
+// Overall, this class is useful for keeping track of matched orders and presenting the result in a structured manner. 
 class MatchedOrders {
     public: 
         string symbol; 
@@ -45,6 +89,13 @@ class MatchedOrders {
     MatchedOrders() {}
 };
 
+// Limit is a class representing a price level in a trading system. It contains a linked list of orders.
+// - limitPrice: the price level of the limit
+// - totalVolume: the total volume (quantity) of orders at this price level
+// - side: the side of the limit (BUY or SELL)
+// - size: the number of orders in the linked list
+// - headOrder: the head (first) order in the linked list
+// - tailOrder: the tail (last) order in the linked list 
 class Limit {
     public: 
         float limitPrice; 
@@ -65,32 +116,20 @@ class Limit {
     Limit() {}
 }; 
 
-struct customComparator {
-    bool operator() (Limit a, Limit b) const {
-        if (a.side == "BUY") {
-            return (a.limitPrice > b.limitPrice); 
-        } else {
-            return (a.limitPrice < b.limitPrice);
-        } 
-    }
-};
 
+// Convert a float to the string
+// Input float x 
+// Output string 
 string convertFloatToString(float x) {
     stringstream s;
     s<<x; 
-    string finalResultult=s.str(); 
-    return finalResultult; 
+    string finalResult=s.str(); 
+    return finalResult; 
 }
 
-unordered_map<int, StockOrder> orderLookUp; 
-//This string will be SymBol + BUY/SELL + price Limit
-unordered_map<string, Limit> limitLookUp; 
-//This string will be SymBol
-unordered_map<string, set<float>> limitSetSellLookUp;
-unordered_map<string, set<float, greater<float>>> limitSetBuyLookUp;
-
-set<string> allSymbols;
-
+//Convert a string to string ot a float
+// Input float x 
+// Output string 
 float convertToFloat(const std::string& priceString) {
     size_t dotPos = priceString.find('.');
     if (dotPos == std::string::npos) {
@@ -106,18 +145,20 @@ float convertToFloat(const std::string& priceString) {
 
     return std::stof(priceString);
 }
+
+//Split string s to vector of string 
 vector<string> splitString(string s){
     for(int i = 0; i < s.size(); ++i){
         if(s[i] == ',') s[i] = ' ';
     }
     istringstream is(s);
-    vector<string> finalResultult;
+    vector<string> finalResult;
     string x;
-    while(is >> x) finalResultult.push_back(x);
-    return finalResultult;   
+    while(is >> x) finalResult.push_back(x);
+    return finalResult;   
 }
 
-void removeOrder(StockOrder* curOrder) {
+void removeOrder(StockOrder* curOrder, vector<string>& finalResult, unordered_map<int, StockOrder>& orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>>& limitSetBuyLookUp, set<string>& allSymbols) {
     int orderId = curOrder->orderId;
     orderLookUp.erase(orderId);
     string keyLimitLookUp = curOrder->symbol + curOrder->side + convertFloatToString(curOrder->price);
@@ -151,7 +192,7 @@ void removeOrder(StockOrder* curOrder) {
     }
 }
 
-void addOrder(StockOrder* curOrder) {
+void addOrder(StockOrder* curOrder, vector<string>& finalResult, unordered_map<int, StockOrder>& orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>>& limitSetBuyLookUp, set<string>& allSymbols) {
     string symbol = curOrder->symbol;
     string side = curOrder->side; 
     int orderId = curOrder->orderId; 
@@ -183,7 +224,7 @@ void addOrder(StockOrder* curOrder) {
     } 
 } 
 
-void matchOrder(StockOrder* curOrder) {
+void matchOrder(StockOrder* curOrder, vector<string>& finalResult, unordered_map<int, StockOrder>& orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>>& limitSetBuyLookUp, set<string>& allSymbols) {
     int orderId = curOrder->orderId;
     string symbol = curOrder->symbol; 
     string side = curOrder->side; 
@@ -228,7 +269,7 @@ void matchOrder(StockOrder* curOrder) {
         }  
         if (potentialMatchOrder->volume == 0) {
             //Hand in the remove all in here
-            removeOrder(potentialMatchOrder);
+            removeOrder(potentialMatchOrder, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
         } 
         
         //There is a match, so now we need to remove it from the order from the order book. 
@@ -238,7 +279,7 @@ void matchOrder(StockOrder* curOrder) {
         
     }
     if (curOrder->volume != 0) {
-        addOrder(curOrder); 
+        addOrder(curOrder,finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols); 
     }
     for (MatchedOrders& matchedOrders : vecMatchedOrders) {
         finalResult.push_back(matchedOrders.symbol + "," + convertFloatToString(matchedOrders.price) + "," + to_string(matchedOrders.volume) + "," +  to_string(matchedOrders.aggfinalResultsive_order_id) + "," + to_string(matchedOrders.passive_order_id));
@@ -246,8 +287,7 @@ void matchOrder(StockOrder* curOrder) {
     return; 
 }
 
-
-void processInsertQuery(vector<string> command) {
+void processInsertQuery(vector<string> command, vector<string>& finalResult, unordered_map<int, StockOrder>& orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>>& limitSetBuyLookUp, set<string>& allSymbols) {
     int orderId = stoi(command[1]); 
     string symbol = command[2];
     string side = command[3];
@@ -260,11 +300,11 @@ void processInsertQuery(vector<string> command) {
     //I have not added the order yet. 
     //It will added in the matchOrder
     //Add order
-    matchOrder(&curOrder);
+    matchOrder(&curOrder, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
     return;    
 }
   
-void processAmendQuery(vector<string> command) {
+void processAmendQuery(vector<string> command, vector<string>& finalResult, unordered_map<int, StockOrder>& orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>>& limitSetBuyLookUp, set<string>& allSymbols) {
     int orderId = stoi(command[1]); 
     float price_change = convertToFloat(command[2]); 
     int volume_change = stoi(command[3]);
@@ -287,25 +327,25 @@ void processAmendQuery(vector<string> command) {
         return;  
     }  
 
-    removeOrder(&curOrder); 
+    removeOrder(&curOrder, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols); 
     curOrder.volume = volume_change;
     curOrder.price = price_change; 
-    matchOrder(&curOrder);
+    matchOrder(&curOrder, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
     return; 
 }  
 
-void processPullQuery(vector<string> command) {
+void processPullQuery(vector<string> command, vector<string>& finalResult, unordered_map<int, StockOrder> orderLookUp, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>> limitSetBuyLookUp, set<string> allSymbols) {
     int orderId = stoi(command[1]);
     if (orderLookUp.find(orderId) != orderLookUp.end()) {
         StockOrder curOrder = orderLookUp[orderId]; 
-        removeOrder(&curOrder);
+        removeOrder(&curOrder, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
     } else {
         cout << "Invalid pull request";
     }
 }
 
 
-void outPutPerSymbol() {
+void outPutPerSymbol(vector<string>& finalResult, unordered_map<string, Limit>& limitLookUp, unordered_map<string, set<float>>& limitSetSellLookUp, unordered_map<string, set<float, greater<float>>> limitSetBuyLookUp, set<string> allSymbols) {
     for (const string& symbol : allSymbols) {
         if (limitSetBuyLookUp[symbol].size() != 0 || limitSetSellLookUp[symbol].size() != 0) {
             finalResult.push_back("===" + symbol + "===");
@@ -329,19 +369,28 @@ void outPutPerSymbol() {
 }
 
 vector<string> run(vector<string> const& input) {
+    vector<string> finalResult;
+    unordered_map<int, StockOrder> orderLookUp; 
+    //This string will be SymBol + BUY/SELL + price Limit
+    unordered_map<string, Limit> limitLookUp; 
+    //This string will be SymBol
+    unordered_map<string, set<float>> limitSetSellLookUp;
+    unordered_map<string, set<float, greater<float>>> limitSetBuyLookUp;
+    set<string> allSymbols;
+    allSymbols.insert("abc");
     for (int i = 0; i < input.size(); i++) {
         vector<string> command = splitString(input[i]);
         //Add the timestamp; 
         command.push_back(to_string(i));
         if (command[0] == "INSERT") {
-            processInsertQuery(command); 
+            processInsertQuery(command, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
         } else if (command[0] == "AMEND") {
-            processAmendQuery(command);  
+            processAmendQuery(command, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);  
         } else if (command[0] == "PULL") {
-            processPullQuery(command);
+            processPullQuery(command, finalResult, orderLookUp, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
         }
     } 
-    outPutPerSymbol();
+    outPutPerSymbol(finalResult, limitLookUp, limitSetSellLookUp, limitSetBuyLookUp, allSymbols);
     return finalResult;
 }
 

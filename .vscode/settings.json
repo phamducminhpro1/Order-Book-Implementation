@@ -6,6 +6,10 @@
         "xstring": "cpp",
         "vector": "cpp",
         "iosfwd": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "xstddef": "cpp"
     }
 }
