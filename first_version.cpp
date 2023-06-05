@@ -7,7 +7,7 @@ To elaborate further:
 - unordered_map<int, StockOrder> orderLookUp;
 We have a map from order ID to StockOrder.
 
-- map<string, set<StockOrder, customComparator>> symbolLookUp;
+- map<string, Book> symbolLookUp;
 We have another map that maps a string to a set of orders, which are compared using a custom comparator.
 
 - set<string> allSymbols;
@@ -21,6 +21,7 @@ We have another map that maps a string to a set of orders, which are compared us
 #include <set>
 #include <sstream>
 #include <map>
+#include <bits/stdc++.h>
 using namespace std;
 
 // Stock order Order.
@@ -86,6 +87,28 @@ public:
     MatchedOrders() {}
 };
 
+struct CompareBuyTree {
+    bool operator()(const std::pair<float, int>& lhs, const std::pair<float, int>& rhs) const {
+        if (lhs.first > rhs.first) {
+            return true;
+        } else if (lhs.first < rhs.first) {
+            return false;
+        } else {
+            return lhs.second < rhs.second;
+        }
+    }
+};
+
+class Book 
+{
+public:
+    //TODO: I might need to reimplement this
+    //Buy or sell and pair 
+    map<pair<float, int>, StockOrder, CompareBuyTree> buyTree;
+    map<pair<float, int>, StockOrder> sellTree; 
+
+    Book() {}
+}; 
 /*
 This code defines a custom comparator struct named customComparator.
 The struct overloads the function call operator to compare two StockOrder objects.
@@ -98,34 +121,7 @@ If side is not "BUY":
 - Orders with lower prices are considered "less" and are placed earlier in the sorted container.
 - If prices are equal, orders with older timestamps are considered "less".
 */
-struct customComparator
-{
-    bool operator()(StockOrder a, StockOrder b) const
-    {
-        if (a.side == "BUY")
-        {
-            if (a.price > b.price)
-                return true;
-            else if (a.price < b.price)
-                return false;
-            else if (a.timestamp < b.timestamp)
-                return true;
-            else
-                return false;
-        }
-        else
-        {
-            if (a.price < b.price)
-                return true;
-            else if (a.price > b.price)
-                return false;
-            else if (a.timestamp < b.timestamp)
-                return true;
-            else
-                return false;
-        }
-    }
-};
+
 
 // Convert a float to the string
 // Input float x
@@ -177,7 +173,7 @@ vector<string> splitString(string s)
 }
 
 // The function match an order in the input with the orther order in the opposite tree
-void findMatch(StockOrder *curOrder, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, set<StockOrder, customComparator>> &symbolLookUp, set<string> &allSymbols)
+void findMatch(StockOrder *curOrder, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, Book> &symbolLookUp, set<string> &allSymbols)
 {
     //Get the data from curOrder
     string symbol = curOrder->symbol;
@@ -186,9 +182,12 @@ void findMatch(StockOrder *curOrder, vector<string> &result, unordered_map<int, 
     string key = symbol + side;
     allSymbols.insert(symbol);
 
-    //Insert the current order to the
-    orderLookUp[orderId] = *curOrder;
-    symbolLookUp[key].insert(*curOrder);
+    //// Add the current order 
+    // if (side == "BUY") {
+    //     symbolLookUp[symbol].buyTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+    // } else {
+    //     symbolLookUp[symbol].sellTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+    // }
 
     //Find the key for the opposite side
     string oppositeSide;
@@ -196,86 +195,82 @@ void findMatch(StockOrder *curOrder, vector<string> &result, unordered_map<int, 
     string oppositeKey = symbol + oppositeSide;
 
     //Vector to stored the match orders
+    //TODO improve this function. 
     vector<MatchedOrders> vecMatchedOrders;
     while (true)
     {
         // If there is nothing in the opposite tree, break the loop
-        if (symbolLookUp.find(oppositeKey) == symbolLookUp.end())
+        if ((symbolLookUp[symbol].buyTree.size() == 0 && side == "SELL") || (symbolLookUp[symbol].sellTree.size() == 0 && side == "BUY"))
         {
+            orderLookUp[orderId] = *curOrder;
+            if (side == "BUY") {
+                symbolLookUp[symbol].buyTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            } else {
+                symbolLookUp[symbol].sellTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            }
             break;
         }
-
+        StockOrder *potentialMatch;
         // There is a potential match in the opposite tree, find the highest priority
-        StockOrder potentialMatch = *symbolLookUp[oppositeKey].begin();
-
-        //Delete current order from symbolLookUp
-        //If the size of symbolLookUp[key] = 1, then we delete the key. 
-        //There is no point in strong a key to an empty set 
-        if (symbolLookUp[key].size() == 1)
-        {
-            symbolLookUp.erase(key);
+        if (oppositeSide == "BUY") {
+            potentialMatch = &symbolLookUp[symbol].buyTree.begin()->second;
+        } else {
+            potentialMatch = &symbolLookUp[symbol].sellTree.begin()->second;
         }
-        else
-        {
-            symbolLookUp[key].erase(*curOrder);
-        }
-        orderLookUp.erase(orderId); 
-
-        //Delete oppositeKey from symbolLookUp
-        //If the size of symbolLookUp[key] = 1, then we delete the key. 
-        if (symbolLookUp[oppositeKey].size() == 1)
-        {
-            symbolLookUp.erase(oppositeKey);
-        }
-        else
-        {
-            symbolLookUp[oppositeKey].erase(potentialMatch);
-        }
-        orderLookUp.erase(potentialMatch.orderId); 
-
         //If there is a match when the current order side is Sell and the price of sell is smaller than or equal 
         //to the potential match. The potential match is the highest price in the buy tree
-        if (curOrder->side == "SELL" && potentialMatch.price >= curOrder->price)
+        if (curOrder->side == "SELL" && potentialMatch->price >= curOrder->price)
         {
-            int tmp = min(potentialMatch.volume, curOrder->volume);
+            int tmp = min(potentialMatch->volume, curOrder->volume);
             curOrder->volume -= tmp;
-            potentialMatch.volume -= tmp;
-            MatchedOrders matches(symbol, potentialMatch.price, tmp, curOrder->orderId, potentialMatch.orderId);
+            potentialMatch->volume -= tmp;
+            orderLookUp[curOrder->orderId].volume = potentialMatch->volume;  
+            MatchedOrders matches(symbol, potentialMatch->price, tmp, curOrder->orderId, potentialMatch->orderId);
             vecMatchedOrders.push_back(matches);
         }
         //If there is a match when the current order side is Buy and the price of buy is greater than  or equal 
         //to the potential match. The potential match is the lowest sell price in the sell tree
-        else if (curOrder->side == "BUY" && potentialMatch.price <= curOrder->price)
+        else if (curOrder->side == "BUY" && potentialMatch->price <= curOrder->price)
         {
-            int tmp = min(potentialMatch.volume, curOrder->volume);
+            int tmp = min(potentialMatch->volume, curOrder->volume);
             curOrder->volume -= tmp;
-            potentialMatch.volume -= tmp;
-            MatchedOrders matches(symbol, potentialMatch.price, tmp, curOrder->orderId, potentialMatch.orderId);
+            potentialMatch->volume -= tmp;
+            orderLookUp[curOrder->orderId].volume = potentialMatch->volume;  
+            MatchedOrders matches(symbol, potentialMatch->price, tmp, curOrder->orderId, potentialMatch->orderId);
             vecMatchedOrders.push_back(matches);
         }
         //There is no match, so insert back to orderbook
         else
         {
             orderLookUp[orderId] = *curOrder;
-            symbolLookUp[key].insert(*curOrder);
-            orderLookUp[potentialMatch.orderId] = potentialMatch;
-            symbolLookUp[oppositeKey].insert(potentialMatch);
-            //There is no more match, so break
+            if (side == "BUY") {
+                symbolLookUp[symbol].buyTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            } else {
+                symbolLookUp[symbol].sellTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            }
             break;
         }
 
         //If the potentialMatch is greater than 0, then add it to the orderbook
-        if (potentialMatch.volume != 0)
+        if (potentialMatch->volume == 0)
         {
-            orderLookUp[potentialMatch.orderId] = potentialMatch;
-            symbolLookUp[oppositeKey].insert(potentialMatch);
+            orderLookUp.erase(orderId);
+            if (oppositeSide == "BUY") {
+                symbolLookUp[symbol].buyTree.erase(symbolLookUp[symbol].buyTree.begin());
+            } else {
+                symbolLookUp[symbol].sellTree.erase(symbolLookUp[symbol].sellTree.begin());
+            }
         }
 
         //If the curOrder is greater than 0, then add it to the orderbook
         if (curOrder->volume != 0)
         {
             orderLookUp[orderId] = *curOrder;
-            symbolLookUp[key].insert(*curOrder);
+            if (side == "BUY") {
+                symbolLookUp[symbol].buyTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            } else {
+                symbolLookUp[symbol].sellTree[make_pair(curOrder->price, curOrder->timestamp)] = *curOrder;
+            }
         }
         else
         {
@@ -292,7 +287,7 @@ void findMatch(StockOrder *curOrder, vector<string> &result, unordered_map<int, 
 }
 
 // Process insert query
-void processInsertQuery(vector<string> command, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, set<StockOrder, customComparator>> &symbolLookUp, set<string> &allSymbols)
+void processInsertQuery(vector<string> command, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, Book> &symbolLookUp, set<string> &allSymbols)
 {
     int orderId = stoi(command[1]);
     string symbol = command[2];
@@ -306,12 +301,13 @@ void processInsertQuery(vector<string> command, vector<string> &result, unordere
 }
 
 // Process amend query
-void processAmendQuery(vector<string> command, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, set<StockOrder, customComparator>> &symbolLookUp, set<string> &allSymbols)
+void processAmendQuery(vector<string> command, vector<string> &result, unordered_map<int, StockOrder> &orderLookUp, map<string, Book> &symbolLookUp, set<string> &allSymbols)
 {
     int orderId = stoi(command[1]);
-    float price = convertToFloat(command[2]);
-    int volume = stoi(command[3]);
+    float changed_price = convertToFloat(command[2]);
+    int changed_volume = stoi(command[3]);
     int timestamp = stoi(command[4]);
+
     StockOrder curOrder;
     if (orderLookUp.find(orderId) != orderLookUp.end())
     {
@@ -322,48 +318,44 @@ void processAmendQuery(vector<string> command, vector<string> &result, unordered
         cout << "Invalid amend request";
     }
 
-    // Nothing changes
-    if (curOrder.volume == volume && curOrder.price == price)
-    {
-        return;
-    }
-    // If it is only volume change then only needs to change the volume
-    //  This means that the prices changes
-    // If the price change then, revaluate and added, order in again again
-    // Delete the order from the table
-    string key = curOrder.symbol + curOrder.side;
-    if (symbolLookUp[key].size() == 1)
-    {
-        symbolLookUp.erase(key);
-    }
-    else
-    {
-        symbolLookUp[key].erase(curOrder);
-    }
+    curOrder = symbolLookUp[curOrder.symbol].buyTree[make_pair(curOrder.price, curOrder.timestamp)];
+    //we only need to get the curorder to have access to the order in the symbol
+    if (changed_volume <= curOrder.volume && curOrder.price == changed_price) {
+        orderLookUp[orderId].volume = changed_volume; 
+        if (curOrder.side == "BUY") {
+            symbolLookUp[curOrder.symbol].buyTree[make_pair(curOrder.price, curOrder.timestamp)].volume = changed_volume;
+        } else {
+            symbolLookUp[curOrder.symbol].sellTree[make_pair(curOrder.price, curOrder.timestamp)].volume = changed_volume;
+        }
+        return; 
+    } 
+
     orderLookUp.erase(orderId);
-
-    curOrder.price = price;
-    if (curOrder.volume <= volume)
-    {
-        curOrder.timestamp = timestamp;
+    if (curOrder.side == "BUY") {
+        symbolLookUp[curOrder.symbol].buyTree.erase(make_pair(curOrder.price, curOrder.timestamp));
+    } else {
+        symbolLookUp[curOrder.symbol].sellTree.erase(make_pair(curOrder.price, curOrder.timestamp));
     }
-    curOrder.volume = volume;
-
-    orderLookUp[orderId] = curOrder;
-    symbolLookUp[key].insert(curOrder);
+    curOrder.volume = changed_volume; 
+    curOrder.price = changed_price;
+    curOrder.timestamp = timestamp; 
     findMatch(&curOrder, result, orderLookUp, symbolLookUp, allSymbols);
 }
 
 // Process pull query
-void processPullQuery(vector<string> command, unordered_map<int, StockOrder> &orderLookUp, map<string, set<StockOrder, customComparator>> &symbolLookUp, set<string> &allSymbols)
+void processPullQuery(vector<string> command, unordered_map<int, StockOrder> &orderLookUp, map<string, Book> &symbolLookUp, set<string> &allSymbols)
 {
     int orderId = stoi(command[1]);
     if (orderLookUp.find(orderId) != orderLookUp.end())
     {
         StockOrder curOrder = orderLookUp[orderId];
-        string symbol = curOrder.symbol + curOrder.side;
-        symbolLookUp[symbol].erase(curOrder);
+        string symbol = curOrder.symbol;
         orderLookUp.erase(orderId);
+        if (curOrder.side == "BUY") {
+            symbolLookUp[symbol].buyTree.erase(make_pair(curOrder.price, curOrder.timestamp));
+        } else {
+            symbolLookUp[symbol].sellTree.erase(make_pair(curOrder.price, curOrder.timestamp));
+        }
     }
     else
     {
@@ -375,7 +367,7 @@ vector<string> run(vector<string> const &input)
 {
     vector<string> result;
     unordered_map<int, StockOrder> orderLookUp;
-    map<string, set<StockOrder, customComparator>> symbolLookUp;
+    map<string, Book> symbolLookUp;
     set<string> allSymbols;
     for (int i = 0; i < input.size(); i++)
     {
@@ -402,23 +394,24 @@ vector<string> run(vector<string> const &input)
         string buyKey = symbol + "BUY";
         string sellKey = symbol + "SELL";
         map<float, int, std::greater<float>> buy;
-        map<float, int> sell;
-        if (symbolLookUp.find(buyKey) != symbolLookUp.end() || symbolLookUp.find(sellKey) != symbolLookUp.end())
+        map<float, int> sell; 
+        //Check if the symbol look up of the buy tree of that is empty 
+        if (symbolLookUp[symbol].buyTree.size() != 0 || symbolLookUp[symbol].sellTree.size())
         {
             result.push_back("===" + symbol + "===");
         }
-        if (symbolLookUp.find(buyKey) != symbolLookUp.end())
+        if (symbolLookUp[symbol].buyTree.size() != 0)
         {
-            for (auto it = symbolLookUp[buyKey].begin(); it != symbolLookUp[buyKey].end(); it++)
+            for (auto it = symbolLookUp[symbol].buyTree.begin(); it != symbolLookUp[symbol].buyTree.end(); it++)
             {
-                buy[it->price] += it->volume;
+                buy[it->second.price] += it->second.volume;
             }
         }
-        if (symbolLookUp.find(sellKey) != symbolLookUp.end())
+        if (symbolLookUp[symbol].sellTree.size() != 0)
         {
-            for (auto it = symbolLookUp[sellKey].begin(); it != symbolLookUp[sellKey].end(); it++)
+            for (auto it = symbolLookUp[symbol].sellTree.begin(); it != symbolLookUp[symbol].sellTree.end(); it++)
             {
-                sell[it->price] += it->volume;
+                sell[it->second.price] += it->second.volume;
             }
         }
         auto it1 = buy.begin();
